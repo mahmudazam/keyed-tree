@@ -5,15 +5,48 @@ module KeyedTree
 , KeyPath
 , exampleTree
 , get
-, getWithKeyPath
-, getWithPath
-, keyPathFromPath
+, set
 ) where
 
 import Data.HashMap.Strict as HM
 
 import Path
 import Str
+
+
+
+data KeyedTree = KeyedTree { label :: (Maybe Str)
+                           , children :: (HashMap Key KeyedTree)
+                           }
+                           deriving Show
+
+get :: KeyedTree -> Str -> Maybe KeyedTree
+get tree pathStr = getWithKeyPath tree (rootPath pathStr)
+
+getWithKeyPath :: KeyedTree -> KeyPath -> Maybe KeyedTree
+getWithKeyPath a [] = Just a
+getWithKeyPath (KeyedTree { label = _, children = c }) (k : path') = do
+    next <- HM.lookup k c
+    getWithKeyPath next path'
+
+set :: KeyedTree -> Str -> KeyedTree -> KeyedTree
+set tree pathStr toInsert = setWithKeyPath tree (rootPath pathStr) toInsert
+
+setWithKeyPath :: KeyedTree -> KeyPath -> KeyedTree -> KeyedTree
+setWithKeyPath _ [] toInsert = toInsert
+setWithKeyPath (KeyedTree { label = v, children = c }) (k:path') toInsert =
+    KeyedTree { label = v
+              , children = insert k child c
+              }
+        where
+            child = if member k c
+                then setWithKeyPath (c ! k) path' toInsert
+                else let newChild = KeyedTree { label = Nothing
+                                              , children = fromList []
+                                              }
+                     in setWithKeyPath newChild path' toInsert
+
+
 
 type Key = HashMap Str Str
 type KeyPath = [Key]
@@ -26,26 +59,12 @@ keyPathFromPath path = Prelude.map toKey path
                 keys = Prelude.map toPair (indices pathElem)
             in fromList (nodeKey:keys)
 
-
-
-data KeyedTree = Leaf Str
-    | Internal (HashMap Key KeyedTree) -- Children: [key:val] -> child
-    deriving Show
-
-get :: KeyedTree -> Str -> Maybe KeyedTree
-get tree pathStr = getWithPath tree actualPath
+rootPath :: Str -> KeyPath
+rootPath pathStr = keyPathFromPath $ root:(pathFromStr pathStr)
     where
         root = PathElem { node = b "/", indices = [] }
-        actualPath = root:(pathFromStr pathStr)
 
-getWithPath :: KeyedTree -> Path -> Maybe KeyedTree
-getWithPath tree path = getWithKeyPath tree (keyPathFromPath path)
 
-getWithKeyPath :: KeyedTree -> KeyPath -> Maybe KeyedTree
-getWithKeyPath a [] = Just a
-getWithKeyPath (Internal children) (k : path') = do
-    next <- HM.lookup k children
-    getWithKeyPath next path'
 
 exampleTree :: KeyedTree
 -- /
@@ -61,38 +80,38 @@ exampleTree :: KeyedTree
 --
 --     |-- bb
 --         |-- bbval
-exampleTree = Internal $ fromList $ [
+exampleTree = KeyedTree Nothing $ fromList [
         (
             fromList [(b "node", b "/")],
-            Internal $ fromList $ [
+            KeyedTree Nothing $ fromList [
                 (
                     fromList [(b "node", b "a")],
-                    Internal $ fromList $ [
+                    KeyedTree Nothing $ fromList [
                         (
                             fromList [(b "node", b "aa"), (b "k1", b "v1")],
-                            Internal $ fromList [
+                            KeyedTree Nothing $ fromList [
                                 (
                                     fromList [(b "node", b "aaa")],
-                                    Leaf $ b "aaaval"
+                                    KeyedTree (Just $ b "aaaval") $ fromList []
                                 )
                             ]
                         ),
                         (
                             fromList [(b "node", b "ab")],
-                            Leaf $ b "abval"
+                            KeyedTree (Just $ b "abval") $ fromList []
                         )
                     ]
                 ),
                 (
                     fromList [(b "node", b "b")],
-                    Internal $ fromList $ [
+                    KeyedTree Nothing $ fromList [
                         (
                             fromList [(b "node", b "ba")],
-                            Leaf $ b "baval"
+                            KeyedTree (Just $ b "baval") $ fromList []
                         ),
                         (
                             fromList [(b "node", b "bb")],
-                            Leaf $ b "bbval"
+                            KeyedTree (Just $ b "bbval") $ fromList []
                         )
                     ]
                 )
